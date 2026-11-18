@@ -11,7 +11,10 @@ import { scarePeds } from './pedestrians.js';
 /** Step the player on foot: move, jump, collide with buildings, stay on land. */
 export function stepOnFoot(G, dt, move, sprint, jumpHeld) {
   const p = G.player;
-  const speed = sprint ? PLAYER.sprintSpeed : PLAYER.walkSpeed;
+  if (p.landRecovery > 0) p.landRecovery = Math.max(0, p.landRecovery - dt);
+  // A jump landing costs a beat: 0.25 s of slowed movement before full speed.
+  const recoveryFactor = p.landRecovery > 0 ? 0.55 : 1;
+  const speed = (sprint ? PLAYER.sprintSpeed : PLAYER.walkSpeed) * recoveryFactor;
   // Movement is relative to the camera yaw.
   const fx = Math.sin(p.camYaw);
   const fz = Math.cos(p.camYaw);
@@ -23,7 +26,16 @@ export function stepOnFoot(G, dt, move, sprint, jumpHeld) {
   if (len > 0) {
     mx /= len;
     mz /= len;
-    p.yaw = Math.atan2(mx, mz);
+    // Face the movement direction, but turn at a capped rate — and a little
+    // slower while sprinting, so sprint steering stays tight and controllable
+    // instead of snapping the facing around at full speed.
+    const targetYaw = Math.atan2(mx, mz);
+    const turnRate = sprint ? 10 : 16; // rad/s
+    let dyaw = targetYaw - p.yaw;
+    while (dyaw > Math.PI) dyaw -= Math.PI * 2;
+    while (dyaw < -Math.PI) dyaw += Math.PI * 2;
+    const maxStep = turnRate * dt;
+    p.yaw += Math.max(-maxStep, Math.min(maxStep, dyaw));
   }
   p.vx += (mx * speed - p.vx) * Math.min(1, dt * 10);
   p.vz += (mz * speed - p.vz) * Math.min(1, dt * 10);
@@ -37,6 +49,7 @@ export function stepOnFoot(G, dt, move, sprint, jumpHeld) {
     p.vy -= PLAYER.gravity * dt;
     p.y += p.vy * dt;
     if (p.y <= 0) {
+      if (p.vy < 0) p.landRecovery = 0.25; // just landed from a jump
       p.y = 0;
       p.vy = 0;
     }

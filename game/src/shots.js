@@ -1,7 +1,8 @@
-// The screenshot scenes behind ?shot=title|street|drive|chase. Each one resets
-// the game to the fixed seed, starts the real rules, and drives them forward
-// with scripted inputs for a fixed number of steps — so the frame is what a
-// short game really looks like, and the same seed always gives the same frame.
+// The screenshot scenes behind ?shot=title|street|drive|chase|mission. Each one
+// resets the game to the fixed seed, starts the real rules, and drives them
+// forward with scripted inputs for a fixed number of steps — so the frame is
+// what a short game really looks like, and the same seed always gives the
+// same frame.
 
 import { STEP } from './config.js';
 import { resetGame, stepGame } from './game.js';
@@ -9,6 +10,7 @@ import { startMission } from './missions.js';
 import { addHeat } from './police.js';
 import { spawnCar } from './traffic.js';
 import { tryEnterCar } from './player.js';
+import { PLACES } from './world.js';
 
 const IDLE = { move: { f: 0, s: 0 }, sprint: false, jump: false, handbrake: false, mouse: null, actions: 0 };
 const DRIVE = { move: { f: 1, s: 0 }, sprint: false, jump: false, handbrake: false, mouse: null, actions: 0 };
@@ -71,7 +73,36 @@ export function stageShot(name, G) {
     avenueTraffic(G, 'taxi', -40, 2.5, -Math.PI / 2); // oncoming, westbound lane
     avenueTraffic(G, 'truck', 80, -2.5, Math.PI / 2); // ahead, same lane
     steps(G, DRIVE, 4);
+    // Guarantee the cover shows the living city, not an empty road: stage one
+    // traffic car and one pedestrian relative to where the drive actually
+    // ended, both inside the chase camera's forward view by construction.
+    const car = G.player.car;
+    avenueTraffic(G, 'taxi', car.x + 45, 2.5, -Math.PI / 2); // oncoming, ahead
+    const ped = G.peds[0];
+    ped.x = car.x + 30;
+    ped.z = 8.5; // pavement ahead-right, in frame
+    ped.target = { x: ped.x + 30, z: ped.z };
+    steps(G, DRIVE, 0.5);
     addHeat(G, 25); // keep the two stars lit for the cover
+    return 'play';
+  }
+  if (name === 'mission') {
+    // Mission 2, The Package: on foot at the marina kiosk, waypoint beacon
+    // lit and the objective line live — a mission in progress, not a menu.
+    startMission(G, 1);
+    const kiosk = PLACES.marinaKiosk;
+    const p = G.player;
+    p.x = kiosk.x - 9;
+    p.z = kiosk.z + 7;
+    p.camYaw = Math.atan2(kiosk.x - p.x, kiosk.z - p.z);
+    p.yaw = p.camYaw;
+    for (let i = 0; i < 2; i += 1) {
+      const ped = G.peds[i];
+      ped.x = kiosk.x - 16 + i * 6;
+      ped.z = kiosk.z + 11;
+      ped.target = { x: ped.x + 24, z: ped.z };
+    }
+    steps(G, WALK, 1.5);
     return 'play';
   }
   if (name === 'chase') {

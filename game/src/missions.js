@@ -112,6 +112,12 @@ export function missionInteract(G) {
 }
 
 function completeMission(G) {
+  // A mission completes exactly once: a second completion call for the same
+  // job (two steps landing on the waypoint in one frame, a re-run after a
+  // phase reset) pays nothing, and completing a failed mission is a no-op.
+  if (G.mission.phase === 'done' || G.mission.phase === 'failed') return 0;
+  if (G.mission.completedIndex === G.mission.index) return 0;
+  G.mission.completedIndex = G.mission.index;
   const def = MISSIONS[G.mission.index];
   G.player.cash += def.reward;
   G.stats.earned += def.reward;

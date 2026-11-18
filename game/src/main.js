@@ -1,8 +1,9 @@
 // Boot and the one loop: input is read every frame, the game advances in fixed
 // 1/60 s steps, and the renderer paints what is there. The game moves between
 // four screens: title, play, paused and end (busted, wasted, failed, story).
-// ?seed=N fixes the city. ?shot=title|street|drive|chase (with &seed=N) stages
-// that scene instead of running the loop, paints it and sets window.__shotReady.
+// ?seed=N fixes the city. ?shot=title|street|drive|chase|mission (with &seed=N)
+// stages that scene instead of running the loop, paints it and sets
+// window.__shotReady.
 
 import { SAVE_KEY, STEP } from './config.js';
 import { createGame, EVENT_WASTED, resetGame, stepGame } from './game.js';

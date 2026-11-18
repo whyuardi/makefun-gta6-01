@@ -143,9 +143,11 @@ export function createRender(canvas) {
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(PALETTE.sky);
-  scene.fog = new THREE.Fog(PALETTE.fog, 180, 700);
+  // Fog ends well inside the camera's far plane, so distant buildings fade
+  // into the sky haze instead of popping out of it at the draw distance.
+  scene.fog = new THREE.Fog(PALETTE.fog, 170, 620);
 
-  const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 1200);
+  const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 850);
   camera.position.set(0, 40, 60);
 
   const sun = new THREE.DirectionalLight(PALETTE.sun, 2.6);
@@ -361,7 +363,9 @@ export function createRender(canvas) {
     }
   }
 
-  /** Move the sun to follow the player so shadows stay crisp. */
+  /** Move the sun to follow the player so shadows stay crisp. Called every
+   * frame from draw() with the player's car (or the player on foot) as the
+   * focus — the shadow camera is never left behind at the spawn point. */
   function followSun(focus) {
     sun.position.set(focus.x + 140, 220, focus.z + 90);
     sun.target.position.set(focus.x, 0, focus.z);

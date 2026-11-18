@@ -72,10 +72,13 @@ function spawnCop(G) {
   // Cops arrive from just outside sight range, the same distance as the
   // interceptors: the player gets a real window to break away and cool the
   // heat (a cop spawning inside sight range would make the heat never decay
-  // on foot, and mission 3 unlosable-by-hiding).
+  // on foot, and mission 3 unlosable-by-hiding). spawnRange (55) stays
+  // outside seeRange (46) — the clamp this relies on. A small seeded jitter
+  // around the ring means two cops never spawn at the exact same spot.
   const a = G.rng.range(0, Math.PI * 2);
-  const x = G.player.x + Math.sin(a) * POLICE.spawnRange;
-  const z = G.player.z + Math.cos(a) * POLICE.spawnRange;
+  const r = POLICE.spawnRange + G.rng.range(-4, 4);
+  const x = G.player.x + Math.sin(a) * r;
+  const z = G.player.z + Math.cos(a) * r;
   const cop = {
     id: G.nextId,
     x: Math.max(-HALF, Math.min(HALF, x)),

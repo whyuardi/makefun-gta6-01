@@ -14,7 +14,28 @@ import { createPickups, playerAttack, updatePickups, updateThugs } from './comba
 import { makePersonMesh } from './render.js';
 import { ACT_ATTACK, ACT_INTERACT } from './input.js';
 
+// The step flags must stay one bit each: MISSION_DONE once shared
+// EVENT_BUSTED's bit (both 1), so finishing a job showed the BUSTED screen.
+// Fail loudly at startup rather than letting that collision back in silently.
+function assertStepFlags() {
+  const flags = { EVENT_BUSTED, MISSION_DONE, MISSION_FAILED, EVENT_WASTED };
+  for (const [name, value] of Object.entries(flags)) {
+    if (value === 0 || (value & (value - 1)) !== 0) {
+      throw new Error(`SOLMAR HEAT: step flag ${name}=${value} is not a single bit`);
+    }
+  }
+  const names = Object.keys(flags);
+  for (let i = 0; i < names.length; i += 1) {
+    for (let j = i + 1; j < names.length; j += 1) {
+      if ((flags[names[i]] & flags[names[j]]) !== 0) {
+        throw new Error(`SOLMAR HEAT: step flags ${names[i]} and ${names[j]} share a bit`);
+      }
+    }
+  }
+}
+
 export function createGame(seed, render, audio) {
+  assertStepFlags();
   const rng = createRandom(seed);
   const city = createCity(rng);
   const G = {
@@ -47,6 +68,7 @@ export function createGame(seed, render, audio) {
       yaw: Math.PI * 0.75,
       camYaw: Math.PI * 0.75,
       camPitch: 0.18,
+      landRecovery: 0, // seconds of slowed movement left after a jump landing
       health: PLAYER.maxHealth,
       ammo: PISTOL.ammoStart,
       hasPistol: false,

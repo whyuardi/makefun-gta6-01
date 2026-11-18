@@ -21,6 +21,11 @@ export function createInput(canvas) {
   let mouseDX = 0;
   let mouseDY = 0;
   let locked = false;
+  // Interact is edge-triggered: one key press queues exactly one ACT_INTERACT,
+  // and presses closer than 150 ms apart are merged, so a single press (or a
+  // key-repeat burst) can never fire two interactions.
+  let lastInteractAt = -Infinity;
+  const INTERACT_DEBOUNCE_MS = 150;
 
   window.addEventListener('keydown', (event) => {
     if (event.target && (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA')) return;
@@ -28,7 +33,14 @@ export function createInput(canvas) {
       keys.add(event.code);
       event.preventDefault();
     } else if (event.code === 'KeyE' || event.code === 'KeyF') {
-      if (!event.repeat) actions |= ACT_INTERACT;
+      // E and F both interact (E: pick up / grab, F: steal / exit car).
+      if (!event.repeat) {
+        const now = performance.now();
+        if (now - lastInteractAt >= INTERACT_DEBOUNCE_MS) {
+          actions |= ACT_INTERACT;
+          lastInteractAt = now;
+        }
+      }
     } else if (event.code === 'KeyP' || event.code === 'Escape') {
       if (!event.repeat) actions |= ACT_PAUSE;
     } else if (event.code === 'Enter') {
