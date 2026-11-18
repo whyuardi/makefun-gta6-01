@@ -3,17 +3,120 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Block Dodger</title>
+<title>SOLMAR HEAT — an open-world crime game</title>
+<link rel="icon" href="data:,">
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #11141b; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0e1420; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
   #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
-  /* Read aloud, never shown: the status line screen readers announce. */
   #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .hidden { display: none !important; }
+  #hud { position: fixed; inset: 0; pointer-events: none; color: #f4f1e8; z-index: 5; }
+  .panel { background: rgba(10, 16, 26, 0.62); border: 1px solid rgba(255,255,255,0.16); border-radius: 10px; padding: 10px 14px; }
+  #topleft { position: absolute; top: 14px; left: 14px; min-width: 240px; }
+  #healthbar { height: 14px; background: rgba(255,255,255,0.18); border-radius: 7px; overflow: hidden; margin: 6px 0 4px; }
+  #health-fill { height: 100%; width: 100%; background: #3fae5a; border-radius: 7px; }
+  #health-row { display: flex; justify-content: space-between; font-size: 13px; color: #b9c2c9; }
+  #cash { font-size: 26px; font-weight: 800; color: #7ee081; letter-spacing: 0.5px; }
+  #topright { position: absolute; top: 14px; right: 14px; text-align: right; }
+  #stars { font-size: 26px; letter-spacing: 3px; text-shadow: 0 2px 8px rgba(0,0,0,0.6); }
+  #clock { font-size: 14px; color: #d8dee3; margin-top: 4px; }
+  #objective { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); font-size: 16px; font-weight: 600; text-align: center; max-width: 46vw; }
+  #timer { color: #ffb703; font-size: 20px; font-weight: 800; text-align: center; margin-top: 4px; }
+  #minimap-wrap { position: absolute; right: 14px; bottom: 14px; }
+  #minimap { display: block; width: 220px; height: 220px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.25); box-shadow: 0 4px 18px rgba(0,0,0,0.45); }
+  #bottomleft { position: absolute; left: 14px; bottom: 14px; font-size: 15px; }
+  #speed { font-size: 34px; font-weight: 800; }
+  #ammo { color: #ffd479; }
+  #feed { position: absolute; left: 14px; bottom: 96px; font-size: 14px; line-height: 1.5; text-shadow: 0 1px 4px rgba(0,0,0,0.8); max-width: 420px; }
+  #feed div { opacity: 0.92; }
+  #phone { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); max-width: 520px; background: rgba(16, 22, 34, 0.85); border-left: 4px solid #ffb703; border-radius: 8px; padding: 10px 14px; font-size: 15px; line-height: 1.45; }
+  #phone .from { color: #ffb703; font-weight: 700; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
+  #interact { position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%); font-size: 17px; font-weight: 700; background: rgba(10,16,26,0.7); padding: 8px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.25); }
+  #crosshair { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; background: #fff; border-radius: 50%; box-shadow: 0 0 0 2px rgba(0,0,0,0.5); }
+  #banner { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); font-size: 26px; font-weight: 800; text-align: center; text-shadow: 0 2px 10px rgba(0,0,0,0.8); color: #ffb703; max-width: 80vw; }
+  #damage-flash { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 55%, rgba(229,72,77,0.55) 100%); z-index: 6; }
+  .overlay { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; background: linear-gradient(180deg, rgba(8,12,20,0.25) 0%, rgba(8,12,20,0.78) 100%); color: #f4f1e8; }
+  .card { max-width: 640px; width: calc(100vw - 48px); background: rgba(12, 18, 30, 0.92); border: 1px solid rgba(255,255,255,0.18); border-radius: 16px; padding: 30px 36px; box-shadow: 0 12px 50px rgba(0,0,0,0.6); }
+  .card h1 { margin: 0 0 4px; font-size: 52px; letter-spacing: 2px; color: #ffb703; }
+  .card h1 span { color: #f4f1e8; }
+  .card h2 { margin: 0 0 14px; font-size: 30px; }
+  .card p { line-height: 1.55; color: #d8dee3; margin: 8px 0; font-size: 15px; }
+  .card .tag { color: #ffb703; font-weight: 700; letter-spacing: 2px; font-size: 12px; text-transform: uppercase; }
+  table.controls { border-collapse: collapse; margin: 12px 0; font-size: 14px; }
+  table.controls td { padding: 3px 14px 3px 0; color: #d8dee3; }
+  table.controls td:first-child { font-weight: 700; color: #f4f1e8; white-space: nowrap; }
+  .btn { pointer-events: auto; cursor: pointer; display: inline-block; margin: 14px 10px 0 0; padding: 12px 26px; font-size: 17px; font-weight: 800; color: #101623; background: #ffb703; border: none; border-radius: 10px; }
+  .btn:hover { background: #ffc93d; }
+  .btn.ghost { background: transparent; color: #f4f1e8; border: 1px solid rgba(255,255,255,0.4); }
+  .btn.ghost:hover { background: rgba(255,255,255,0.1); }
+  #continue-label { display: block; font-size: 13px; color: #b9c2c9; margin-top: 4px; }
+  @media (max-width: 760px) { #minimap { width: 150px; height: 150px; } #objective { max-width: 60vw; font-size: 13px; } .card h1 { font-size: 38px; } }
 </style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
 </head>
 <body>
-<canvas id="game" aria-label="Block Dodger: move the paddle left and right to dodge falling blocks and catch coins"></canvas>
+<canvas id="game" aria-label="SOLMAR HEAT: an open-world crime game set in the coastal city of Solmar"></canvas>
 <p id="status" role="status" aria-live="polite"></p>
+
+<div id="hud" class="hidden">
+  <div id="topleft" class="panel">
+    <div id="health-row"><span>HEALTH</span><span id="health-text">100</span></div>
+    <div id="healthbar"><div id="health-fill"></div></div>
+    <div id="cash">$0</div>
+  </div>
+  <div id="topright">
+    <div id="stars">☆☆☆☆☆</div>
+    <div id="clock">10:00 • Solmar</div>
+  </div>
+  <div id="objective" class="panel">Welcome to Solmar.</div>
+  <div id="timer"></div>
+  <div id="minimap-wrap"><canvas id="minimap"></canvas></div>
+  <div id="bottomleft" class="panel"><span id="speed"></span> <span id="ammo">Fists</span></div>
+  <div id="feed"></div>
+  <div id="phone" class="hidden"><div class="from">Mara Voss</div><div id="phone-text"></div></div>
+  <div id="interact" class="hidden"></div>
+  <div id="crosshair" class="hidden"></div>
+  <div id="banner" class="hidden"></div>
+</div>
+<div id="damage-flash" class="hidden"></div>
+
+<div id="title" class="overlay">
+  <div class="card">
+    <div class="tag">An open-world crime game</div>
+    <h1>SOLMAR <span>HEAT</span></h1>
+    <p>Solmar: sun, sea, and everybody else's money. You are a new face in town with no cash and no friends — except Mara Voss, a fixer who always has one more job. Steal cars, lose the cops, run the packages, and pull the big one.</p>
+    <table class="controls">
+      <tr><td>W A S D</td><td>Move / drive</td><td>Mouse</td><td>Look</td></tr>
+      <tr><td>Shift</td><td>Sprint</td><td>Space</td><td>Jump / handbrake</td></tr>
+      <tr><td>F</td><td>Steal / exit car</td><td>E</td><td>Interact / pick up</td></tr>
+      <tr><td>Click</td><td>Punch / shoot</td><td>P / Esc</td><td>Pause</td><td>M</td><td>Mute</td></tr>
+    </table>
+    <p>Five jobs from Mara, in order. Wanted stars bring the Solmar PD — lose them by staying out of sight. Your cash and jobs are saved in this browser.</p>
+    <button id="start-btn" class="btn">Start — New Game</button>
+    <button id="continue-btn" class="btn ghost hidden">Continue<span id="continue-label"></span></button>
+  </div>
+</div>
+
+<div id="pause-menu" class="overlay hidden">
+  <div class="card">
+    <h2>Paused</h2>
+    <p>Solmar waits for no one — except right now, when it does.</p>
+    <button id="resume-btn" class="btn">Resume</button>
+    <button id="quit-btn" class="btn ghost">Save &amp; Quit to Title</button>
+  </div>
+</div>
+
+<div id="end-screen" class="overlay hidden">
+  <div class="card">
+    <h2 id="end-title">BUSTED</h2>
+    <p id="end-text"></p>
+    <p id="end-sub"></p>
+    <button id="end-btn" class="btn">Respawn</button>
+  </div>
+</div>
+
 <script type="module" src="./src/main.js"></script>
 </body>
 </html>

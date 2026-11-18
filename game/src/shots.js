@@ -1,79 +1,97 @@
-// The screenshot scenes behind ?shot=start|play|end. Each one plays the real rules forward from a
-// fresh world for a fixed number of steps, steered by a simple autopilot (look ahead each way the
-// paddle could move, keep clear of blocks, chase the lowest coin when that is safe), so the frame
-// is what a short game really looks like and the same seed always gives the same frame.
-import { FIELD, PLAYER, STEP } from './config.js';
-import { EVENT_OVER, KIND_BLOCK } from './world.js';
-import { SCREEN_OVER, SCREEN_PLAY, SCREEN_TITLE } from './render.js';
+// The screenshot scenes behind ?shot=title|street|drive|chase. Each one resets
+// the game to the fixed seed, starts the real rules, and drives them forward
+// with scripted inputs for a fixed number of steps — so the frame is what a
+// short game really looks like, and the same seed always gives the same frame.
 
-const START_SECONDS = 5;
-const PLAY_SECONDS = 26;
-const END_LIMIT_SECONDS = 600;
-/**
- * How far ahead, in seconds, the autopilot checks each way it could move: the play scene's pilot
- * looks well ahead and keeps all its lives; the end scene's looks only a moment ahead, so it is
- * caught out once the blocks speed up, as a hurried player is.
- */
-const HORIZON_PLAY = 0.7;
-const HORIZON_END = 0.25;
-const SAMPLE = 1 / 30;
-const DIRECTIONS = [0, -1, 1];
-/** Extra room, each side, it keeps between the paddle and a block. */
-const MARGIN = 10;
+import { STEP } from './config.js';
+import { resetGame, stepGame } from './game.js';
+import { startMission } from './missions.js';
+import { addHeat } from './police.js';
+import { spawnCar } from './traffic.js';
+import { tryEnterCar } from './player.js';
 
-/** Seconds until moving in `direction` (-1, 0, 1) runs the paddle into a block; Infinity when it never does. */
-function timeToHit(state, direction, horizon) {
-  const player = state.player;
-  for (let t = SAMPLE; t <= horizon; t += SAMPLE) {
-    const x = Math.min(FIELD.width - player.width, Math.max(0, player.x + direction * PLAYER.speed * t));
-    for (let index = 0; index < state.items.length; index += 1) {
-      const item = state.items[index];
-      if (!item.active || item.kind !== KIND_BLOCK) continue;
-      const y = item.y + item.speed * t;
-      if (y + item.height > player.y && y < player.y + player.height && item.x < x + player.width + MARGIN && item.x + item.width > x - MARGIN) return t;
-    }
-  }
-  return Infinity;
+const IDLE = { move: { f: 0, s: 0 }, sprint: false, jump: false, handbrake: false, mouse: null, actions: 0 };
+const DRIVE = { move: { f: 1, s: 0 }, sprint: false, jump: false, handbrake: false, mouse: null, actions: 0 };
+const WALK = { move: { f: 0.7, s: 0 }, sprint: false, jump: false, handbrake: false, mouse: null, actions: 0 };
+
+function steps(G, input, seconds) {
+  for (let i = 0; i < seconds / STEP; i += 1) stepGame(G, input, STEP);
 }
 
-/** Of the safe ways to move, the one toward the lowest coin (or the centre); else the one that is hit last. */
-function autopilot(state, horizon) {
-  const player = state.player;
-  let coin = null;
-  for (let index = 0; index < state.items.length; index += 1) {
-    const item = state.items[index];
-    if (item.active && item.kind !== KIND_BLOCK && (coin === null || item.y > coin.y)) coin = item;
-  }
-  const target = coin === null ? FIELD.width / 2 : coin.x + coin.width / 2;
-  const centre = player.x + player.width / 2;
-  const wanted = target > centre + 8 ? 1 : target < centre - 8 ? -1 : 0;
-  let best = wanted;
-  let bestTime = timeToHit(state, wanted, horizon);
-  for (let index = 0; index < DIRECTIONS.length && bestTime !== Infinity; index += 1) {
-    const time = timeToHit(state, DIRECTIONS[index], horizon);
-    if (time > bestTime) {
-      bestTime = time;
-      best = DIRECTIONS[index];
-    }
-  }
-  return best;
+/** Put the player on Coral Avenue (the z = 0 road), facing east, and steal a car there. */
+function stealOnAvenue(G, type, x) {
+  const p = G.player;
+  p.x = x - 2;
+  p.z = -2.5;
+  p.camYaw = Math.PI / 2;
+  p.yaw = Math.PI / 2;
+  spawnCar(G, type, x, -2.5, Math.PI / 2, 'parked');
+  tryEnterCar(G);
+}
+
+/** A traffic car on the avenue: it needs its road-graph nodes to drive. */
+function avenueTraffic(G, type, x, z, angle) {
+  const car = spawnCar(G, type, x, z, angle, 'traffic');
+  // The avenue is row j = 5 (z = 0); the car heads for the next intersection.
+  const i = Math.max(0, Math.min(10, Math.round((x + 290) / 58)));
+  const east = angle === Math.PI / 2;
+  car.prev = G.city.nodeAt(east ? i : i + 1, 5);
+  car.node = G.city.nodeAt(east ? Math.min(10, i + 1) : Math.max(0, i), 5);
+  car.speed = car.cruise;
+  return car;
 }
 
 /**
- * Set `world` to the named scene (start, play or end; any other name is start) and return the
- * screen to draw over it and the best score to show.
+ * Set `G` to the named scene and return the screen to draw over it.
+ * Any unknown name stages the title.
  */
-export function stageShot(name, world) {
-  world.reset();
-  if (name !== 'play' && name !== 'end') {
-    for (let index = 0; index < START_SECONDS / STEP; index += 1) world.step(STEP, 0, true);
-    return { screen: SCREEN_TITLE, best: 0 };
+export function stageShot(name, G) {
+  resetGame(G);
+  G.cameraOverride = null;
+  if (name === 'street') {
+    startMission(G, 0);
+    const p = G.player;
+    p.x = -40;
+    p.z = 8.5;
+    p.camYaw = Math.PI / 2;
+    p.yaw = Math.PI / 2;
+    // A few pedestrians on this stretch of pavement, strolling east.
+    for (let i = 0; i < 3; i += 1) {
+      const ped = G.peds[i];
+      ped.x = -30 + i * 7;
+      ped.z = i % 2 === 0 ? 8.5 : -8.5;
+      ped.target = { x: ped.x + 30, z: ped.z };
+    }
+    steps(G, WALK, 2.5);
+    return 'play';
   }
-  const limit = name === 'end' ? END_LIMIT_SECONDS : PLAY_SECONDS;
-  const horizon = name === 'end' ? HORIZON_END : HORIZON_PLAY;
-  for (let index = 0; index < limit / STEP; index += 1) {
-    if (world.step(STEP, autopilot(world.state, horizon), false) & EVENT_OVER) break;
+  if (name === 'drive') {
+    startMission(G, 0);
+    stealOnAvenue(G, 'sports', -116);
+    avenueTraffic(G, 'taxi', -40, 2.5, -Math.PI / 2); // oncoming, westbound lane
+    avenueTraffic(G, 'truck', 80, -2.5, Math.PI / 2); // ahead, same lane
+    steps(G, DRIVE, 4);
+    addHeat(G, 25); // keep the two stars lit for the cover
+    return 'play';
   }
-  const over = world.state.lives === 0;
-  return { screen: over ? SCREEN_OVER : SCREEN_PLAY, best: world.state.score };
+  if (name === 'chase') {
+    stealOnAvenue(G, 'sedan', -58);
+    addHeat(G, 55); // three stars
+    steps(G, DRIVE, 3);
+    // Frame the getaway from the front: the car, the avenue behind it, and the
+    // interceptors closing in from the west.
+    const car = G.player.car;
+    G.cameraOverride = {
+      pos: [car.x + 34, 8, car.z + 13],
+      look: [car.x - 12, 2, car.z],
+    };
+    return 'play';
+  }
+  // title: a quiet street-level view of Solmar Plaza at golden hour.
+  G.cameraOverride = {
+    pos: [26, 9, 52],
+    look: [-14, 5, -46],
+  };
+  steps(G, IDLE, 1.5);
+  return 'title';
 }
