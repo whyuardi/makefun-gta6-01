@@ -63,6 +63,25 @@ node tools/playtest.mjs   # scripted browser playtest with real keyboard input
 node tools/shots.mjs      # takes the 4 screenshots into screenshots/
 ```
 
+## Verification
+
+Measured on the final code in this session:
+
+- Sim test: **26/26 checks pass** (`node tools/sim-test.mjs`), including a
+  regression check that every step flag (BUSTED, MISSION_DONE,
+  MISSION_FAILED) is a single distinct bit.
+- Playtest: **12/12 checks pass** (`node tools/playtest.mjs`), including a
+  check that completing a mission never shows the BUSTED screen — **0 page
+  errors, 0 non-localhost requests**.
+- Screenshots: all 4 re-taken by `tools/shots.mjs` from the final code
+  (1-drive.jpg 109,622 bytes, 2-street.jpg 97,448, 3-chase.jpg 103,684,
+  4-mission.jpg 76,576), each 0 errors and local-only requests.
+- Dossier: `MAKEFUN_OUTPUT_DIR=out node main.ts` run twice to two different
+  directories produces byte-identical `dossier.json` (sha256
+  `c02b32d02c869841959c9f6e5f6fa791ae93fdb961cfc62e44d479d19fcbe97e`).
+- Kit check: **4 passed, 0 failed** (`makefun.mjs check`, the rest are
+  site-side checks that run at submission).
+
 ## Structure
 
 - `game/index.html` — page, import map, HUD and menus
