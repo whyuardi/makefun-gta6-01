@@ -9,6 +9,19 @@ import { fileURLToPath } from 'node:url';
 const REPO = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const BASE = 'http://127.0.0.1:8080';
 
+// Pump in short chunks: one long synchronous evaluate blocks the page's main
+// thread for seconds, and the headless shell drops the debugger socket when
+// the renderer stays blocked (~6 s under load), hanging the run with no
+// error. 0.5 s per evaluate stays well under that.
+async function pumpFor(s, seconds) {
+  let left = seconds;
+  while (left > 0) {
+    const chunk = Math.min(0.5, left);
+    await s.evaluate(`window.__solmar.pump(${chunk})`);
+    left -= chunk;
+  }
+}
+
 const server = await launchServer(REPO, 8080);
 const browser = await launchBrowser(9222, '320,180');
 try {
@@ -22,7 +35,7 @@ try {
 
   // Walk, steal, drive, deliver — same as the playtest.
   await s.keyDown('KeyW', 'w', 87);
-  await s.evaluate('window.__solmar.pump(2)');
+  await pumpFor(s, 2);
   await s.keyUp('KeyW', 'w', 87);
   await s.evaluate(`(() => { const G = window.__solmar.G; const car = G.cars.find((c) => c.driver === 'parked'); G.player.x = car.x + 2; G.player.z = car.z; })()`);
   await s.evaluate('window.__solmar.pump(0.3)');
@@ -30,13 +43,13 @@ try {
   await s.evaluate('window.__solmar.pump(0.5)');
   console.log('after steal', JSON.stringify(await state()));
   await s.keyDown('KeyW', 'w', 87);
-  await s.evaluate('window.__solmar.pump(3)');
+  await pumpFor(s, 3);
   await s.keyUp('KeyW', 'w', 87);
   console.log('after drive', JSON.stringify(await state()));
   await s.evaluate(`(() => { const G = window.__solmar.G; const wp = G.mission.waypoint; const car = G.player.car; if (!car || !wp) return; car.x = wp.x + 12; car.z = wp.z; car.angle = -Math.PI / 2; car.speed = 0; })()`);
   await s.evaluate('window.__solmar.pump(0.3)');
   await s.keyDown('KeyW', 'w', 87);
-  await s.evaluate('window.__solmar.pump(2.5)');
+  await pumpFor(s, 2.5);
   await s.keyUp('KeyW', 'w', 87);
   await s.evaluate('window.__solmar.pump(0.5)');
   console.log('after delivery', JSON.stringify(await state()));
@@ -48,6 +61,13 @@ try {
     await s.evaluate('window.__solmar.pump(0.25)');
     console.log(`pump ${(i + 1) * 0.25}s`, JSON.stringify(await state()));
   }
+  // Verdict, not just a log: the decay staging must never end on the BUSTED
+  // (or any end) screen — if it does, this probe fails loudly instead of
+  // leaving the bust buried in the trace.
+  const finalState = await state();
+  const busted = finalState.screen !== 'play';
+  console.log(busted ? `DEBUG-BUST: FAILED — ended on screen '${finalState.screen}'` : 'DEBUG-BUST: OK — no bust during decay staging');
+  process.exitCode = busted ? 1 : 0;
   s.close();
 } finally {
   await browser.close();

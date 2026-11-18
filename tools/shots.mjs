@@ -15,7 +15,7 @@ const SHOTS = [
   { shot: 'drive', file: '1-drive.jpg' },
   { shot: 'street', file: '2-street.jpg' },
   { shot: 'chase', file: '3-chase.jpg' },
-  { shot: 'title', file: '4-mission.jpg' },
+  { shot: 'mission', file: '4-mission.jpg' },
 ];
 
 const server = await launchServer(REPO, 8080);
@@ -52,6 +52,12 @@ try {
     if (size > 262144) {
       failed = true;
       console.log(`  OVERSIZE: ${size} > 262144`);
+    }
+    if (size < 10000) {
+      // A blank or failed frame compresses to almost nothing; a real city
+      // scene never does. Treat a tiny file as a broken shot, not a pass.
+      failed = true;
+      console.log(`  SUSPICIOUSLY SMALL: ${size} bytes — likely a blank frame`);
     }
     session.close();
   }

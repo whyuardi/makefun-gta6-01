@@ -160,7 +160,23 @@ export async function openPage(port, url) {
   }
   const target = await res.json();
   const ws = new WebSocket(target.webSocketDebuggerUrl);
-  await once(ws, 'open');
+  // Timeout guard: a headless shell that never opens its debugger must fail
+  // fast here instead of hanging the whole run on the socket open. The timer
+  // is cancelled the moment the socket opens — a stray timer left running
+  // would close a live session mid-run (that exact bug killed every
+  // playtest at ~10 s: a sleep().then(ws.close()) that fired after the race
+  // had already settled).
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      try { ws.close(); } catch { /* already gone */ }
+      reject(new Error('CDP websocket did not open within 10s'));
+    }, 10000);
+    ws.addEventListener('open', () => { clearTimeout(timer); resolve(); }, { once: true });
+    ws.addEventListener('error', (event) => {
+      clearTimeout(timer);
+      reject(event.error ?? new Error('CDP websocket error'));
+    }, { once: true });
+  });
   const session = new Session(ws);
   await session.send('Page.enable');
   await session.send('Runtime.enable');

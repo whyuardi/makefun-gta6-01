@@ -56,6 +56,10 @@ function at(G, x, z) {
 // a job showed the BUSTED screen. A mission-done flag must never set the
 // bust bit, and no two flags may share a bit.
 check('step flags are distinct bits', (MISSION_DONE & EVENT_BUSTED) === 0 && (MISSION_FAILED & EVENT_BUSTED) === 0 && (MISSION_DONE & MISSION_FAILED) === 0 && MISSION_DONE !== 0 && MISSION_FAILED !== 0 && EVENT_BUSTED !== 0, `DONE=${MISSION_DONE} FAILED=${MISSION_FAILED} BUSTED=${EVENT_BUSTED}`);
+// Mirrors the startup assertion in game.js: every flag must be a single bit
+// (a power of two) — a flag with two bits set would alias two outcomes at once.
+const isSingleBit = (f) => f !== 0 && (f & (f - 1)) === 0;
+check('step flags are each a single bit (power of two)', isSingleBit(EVENT_BUSTED) && isSingleBit(MISSION_DONE) && isSingleBit(MISSION_FAILED), `BUSTED=${EVENT_BUSTED} DONE=${MISSION_DONE} FAILED=${MISSION_FAILED}`);
 
 // --- Wanted math ---
 check('stars: 0 heat is clean', computeStars(0) === 0);
